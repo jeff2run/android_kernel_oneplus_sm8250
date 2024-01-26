@@ -237,7 +237,7 @@ static int fuse_dentry_revalidate(struct dentry *entry, unsigned int flags)
 			spin_unlock(&fc->lock);
 		}
 		kfree(forget);
-		if (ret == -ENOMEM)
+		if (ret == -ENOMEM || ret == -EINTR)
 			goto out;
 		if (ret || fuse_invalid_attr(&outarg.attr) ||
 		    (outarg.attr.mode ^ inode->i_mode) & S_IFMT)
@@ -301,7 +301,7 @@ static void fuse_dentry_canonical_path(const struct path *path,
 	char *path_name;
 	int err;
 
-	path_name = (char *)__get_free_page(GFP_KERNEL);
+	path_name = (char *)get_zeroed_page(GFP_KERNEL);
 	if (!path_name)
 		goto default_path;
 
@@ -483,8 +483,6 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 		mode &= ~current_umask();
 
 	flags &= ~O_NOCTTY;
-
-
 	memset(&inarg, 0, sizeof(inarg));
 	memset(&outentry, 0, sizeof(outentry));
 	inarg.flags = flags;
@@ -877,6 +875,7 @@ static int fuse_rename_common(struct inode *olddir, struct dentry *oldent,
 #ifdef CONFIG_OPLUS_FEATURE_ACM
 	monitor_acm2(oldent, newent, args.in.h.opcode);
 #endif
+
 	return err;
 }
 
@@ -909,6 +908,7 @@ static int fuse_rename2(struct inode *olddir, struct dentry *oldent,
 					 FUSE_RENAME,
 					 sizeof(struct fuse_rename_in));
 	}
+
 	return err;
 }
 

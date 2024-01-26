@@ -314,7 +314,6 @@ enum rw_hint {
 #define IOCB_WAITQ		(1 << 19)
 #define IOCB_NOIO		(1 << 20)
 
-
 struct kiocb {
 	struct file		*ki_filp;
 
@@ -2089,18 +2088,6 @@ static inline void init_sync_kiocb(struct kiocb *kiocb, struct file *filp)
 	};
 }
 
-static inline void kiocb_clone(struct kiocb *kiocb, struct kiocb *kiocb_src,
-			       struct file *filp)
-{
-	*kiocb = (struct kiocb) {
-		.ki_filp = filp,
-		.ki_flags = kiocb_src->ki_flags,
-		.ki_hint = kiocb_src->ki_hint,
-		.ki_ioprio = kiocb_src->ki_ioprio,
-		.ki_pos = kiocb_src->ki_pos,
-	};
-}
-
 /*
  * Inode state bits.  Protected by inode->i_lock
  *
@@ -3422,7 +3409,7 @@ static inline int kiocb_set_rw_flags(struct kiocb *ki, rwf_t flags)
 	int kiocb_flags = 0;
 
 	/* make sure there's no overlap between RWF and private IOCB flags */
-	BUILD_BUG_ON((__force int) RWF_SUPPORTED & IOCB_EVENTFD);
+	BUILD_BUG_ON((__force int)RWF_SUPPORTED & IOCB_EVENTFD);
 
 	if (!flags)
 		return 0;
@@ -3434,7 +3421,7 @@ static inline int kiocb_set_rw_flags(struct kiocb *ki, rwf_t flags)
 			return -EOPNOTSUPP;
 		kiocb_flags |= IOCB_NOIO;
 	}
-	kiocb_flags |= (__force int) (flags & RWF_SUPPORTED);
+	kiocb_flags |= (__force int)(flags & RWF_SUPPORTED);
 	if (flags & RWF_SYNC)
 		kiocb_flags |= IOCB_DSYNC;
 
@@ -3498,7 +3485,7 @@ void simple_transaction_set(struct file *file, size_t n);
  * All attributes contain a text representation of a numeric value
  * that are accessed with the get() and set() functions.
  */
-#define DEFINE_SIMPLE_ATTRIBUTE(__fops, __get, __set, __fmt)		\
+#define DEFINE_SIMPLE_ATTRIBUTE_XSIGNED(__fops, __get, __set, __fmt, __is_signed)	\
 static int __fops ## _open(struct inode *inode, struct file *file)	\
 {									\
 	__simple_attr_check_format(__fmt, 0ull);			\
@@ -3509,9 +3496,15 @@ static const struct file_operations __fops = {				\
 	.open	 = __fops ## _open,					\
 	.release = simple_attr_release,					\
 	.read	 = simple_attr_read,					\
-	.write	 = simple_attr_write,					\
+	.write	 = (__is_signed) ? simple_attr_write_signed : simple_attr_write,	\
 	.llseek	 = generic_file_llseek,					\
 }
+
+#define DEFINE_SIMPLE_ATTRIBUTE(__fops, __get, __set, __fmt)		\
+	DEFINE_SIMPLE_ATTRIBUTE_XSIGNED(__fops, __get, __set, __fmt, false)
+
+#define DEFINE_SIMPLE_ATTRIBUTE_SIGNED(__fops, __get, __set, __fmt)	\
+	DEFINE_SIMPLE_ATTRIBUTE_XSIGNED(__fops, __get, __set, __fmt, true)
 
 static inline __printf(1, 2)
 void __simple_attr_check_format(const char *fmt, ...)
@@ -3527,6 +3520,8 @@ ssize_t simple_attr_read(struct file *file, char __user *buf,
 			 size_t len, loff_t *ppos);
 ssize_t simple_attr_write(struct file *file, const char __user *buf,
 			  size_t len, loff_t *ppos);
+ssize_t simple_attr_write_signed(struct file *file, const char __user *buf,
+				 size_t len, loff_t *ppos);
 
 struct ctl_table;
 int proc_nr_files(struct ctl_table *table, int write,
